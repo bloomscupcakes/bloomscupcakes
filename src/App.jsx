@@ -1,4 +1,4 @@
-import { Routes, Route, useLocation } from "react-router-dom";
+import { Routes, Route, useLocation, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { lazy, Suspense, useEffect, useState } from "react";
 
@@ -33,6 +33,18 @@ function AnalyticsTracker() {
 
 export default function App() {
   const location = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    // GitHub Pages 404.html redirects unknown paths to `/?/<path>`.
+    // Detect that pattern on first load and navigate to the intended route.
+    const s = window.location.search || "";
+    if (s.startsWith("?/")) {
+      const raw = s.slice(2).split("&")[0];
+      const path = "/" + raw.replace(/~and~/g, "&");
+      navigate(path + window.location.hash, { replace: true });
+    }
+  }, []);
   const [darkMode, setDarkMode] = useState(() => {
     const saved = localStorage.getItem("darkMode");
     return saved ? JSON.parse(saved) : false;

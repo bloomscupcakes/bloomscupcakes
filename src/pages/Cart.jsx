@@ -119,27 +119,7 @@ return (
         darkMode ? "bg-gray-900 text-gray-100" : "bg-[#FFFCFD] text-gray-800"
       }`}
     >
-      {/* HEADER / LOGO AREA */}
-      <div className="flex flex-col items-center mb-8 px-4 space-y-4">
-        <button
-          onClick={() => document.getElementById('cart-section').scrollIntoView({ behavior: 'smooth' })}
-          className={`px-6 py-2 rounded-full text-sm font-bold transition-all shadow-md hover:shadow-lg ${
-            darkMode ? "bg-pink-600 hover:bg-pink-700 text-white" : "bg-pink-500 hover:bg-pink-600 text-white"
-          }`}
-        >
-          ↓ Go to Your Cart
-        </button>
-      </div>
-
-      <section className="max-w-7xl mx-auto px-4 sm:px-6">
-        <h2 className={`text-2xl sm:text-3xl font-bold text-center mb-6 ${
-          darkMode ? "text-pink-400" : "text-pink-600"
-        }`}>
-          Add More Items
-        </h2>
-        <ProductGrid darkMode={darkMode} />
-      </section>
-
+     
       <div className="max-w-5xl mx-auto px-4 grid lg:grid-cols-5 gap-8 lg:gap-12 mt-16 border-t border-pink-100 dark:border-gray-800 pt-16 w-full">
         
         {/* LEFT COLUMN: CART SUMMARY */}
