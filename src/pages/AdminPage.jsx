@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import app, { db } from "../firebase";
-import { collection, getDocs, query, orderBy, startAfter, limit, updateDoc, doc } from "firebase/firestore";
+import { collection, getDocs, query, orderBy, startAfter, limit, updateDoc, deleteDoc, doc, Timestamp } from "firebase/firestore";
 import { getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
 import Loader from "../components/Loader";
+import OrderEditModal from "../components/OrderEditModal";
+import { PRODUCTS, FLAVOURS } from "../utils/config";
 
 const PAGE_SIZE = 8;
 
@@ -15,6 +17,10 @@ export default function AdminPage({ darkMode }) {
   const [isAuthorized, setIsAuthorized] = useState(true);
   const [lastDoc, setLastDoc] = useState(null);
   const [hasMore, setHasMore] = useState(false);
+  const [editOrder, setEditOrder] = useState(null);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [isBusy, setIsBusy] = useState(false);
 
   const auth = getAuth(app);
   const statusOptions = ["new", "completed", "delivered", "refunded"];
@@ -65,6 +71,202 @@ export default function AdminPage({ darkMode }) {
     }
   };
 
+  const cloneOrderForEdit = (order) => ({
+    ...order,
+    createdAt: order.createdAt?.toDate ? order.createdAt.toDate().toISOString().slice(0, 16) : (typeof order.createdAt === "string" ? order.createdAt.slice(0, 16) : ""),
+    customer: { ...order.customer },
+    fulfillment: { ...order.fulfillment },
+    order: {
+      ...order.order,
+      items: order.order?.items?.map(item => prepareItemForEdit(item)) || []
+    }
+  });
+
+  const openEditModal = (order) => {
+    setEditOrder(cloneOrderForEdit(order));
+    setIsEditOpen(true);
+  };
+
+  const closeEditModal = () => {
+    setIsEditOpen(false);
+    setEditOrder(null);
+  };
+
+  const closeDeletePopup = () => setDeleteTarget(null);
+
+  const updateCustomerField = (field, value) => {
+    setEditOrder(prev => ({ ...prev, customer: { ...prev.customer, [field]: value } }));
+  };
+
+  const updateFulfillmentField = (field, value) => {
+    setEditOrder(prev => ({ ...prev, fulfillment: { ...prev.fulfillment, [field]: value } }));
+  };
+
+  const updateOrderField = (field, value) => {
+    setEditOrder(prev => ({ ...prev, order: { ...prev.order, [field]: value } }));
+  };
+
+  const updateRootField = (field, value) => {
+    setEditOrder(prev => ({ ...prev, [field]: value }));
+  };
+
+  const getProductById = (id) => PRODUCTS.find(product => product.id === id) || PRODUCTS[0];
+  const getProductByTitle = (title) => PRODUCTS.find(product => product.title === title || product.id === title) || PRODUCTS[0];
+  const getFlavourExtra = (flavour) => FLAVOURS.find(option => option.label === flavour)?.extra || 0;
+  const getPackPrice = (productId, packSize) => {
+    const product = getProductById(productId);
+    return product.packSizes.find(pack => pack.name === packSize)?.price ?? product.packSizes?.[0]?.price ?? 0;
+  };
+
+  const prepareItemForEdit = (item) => {
+    const product = item.productId ? getProductById(item.productId) : getProductByTitle(item.productTitle || "");
+    const productId = product.id;
+    const packSize = item.packSize || product.packSizes?.[0]?.name || "";
+    const flavour = item.flavour || FLAVOURS?.[0]?.label || "";
+    const quantity = Number(item.quantity) || 1;
+    const packPrice = getPackPrice(productId, packSize);
+    const pricePerUnit = Number(item.pricePerUnit) || Number(packPrice + getFlavourExtra(flavour));
+
+    return {
+      ...item,
+      productId,
+      productTitle: product.title,
+      packSize,
+      flavour,
+      quantity,
+      pricePerUnit
+    };
+  };
+
+  const updateOrderItemField = (index, field, value) => {
+    setEditOrder(prev => {
+      const items = prev.order.items.map((item, i) => {
+        if (i !== index) return item;
+        let nextItem = { ...item, [field]: value };
+
+        if (field === "productId") {
+          const product = getProductById(value);
+          const defaultPack = product.packSizes?.[0]?.name || "";
+          nextItem.productTitle = product.title;
+          nextItem.packSize = defaultPack;
+          nextItem.pricePerUnit = getPackPrice(value, defaultPack) + getFlavourExtra(nextItem.flavour);
+        }
+
+        if (field === "packSize") {
+          nextItem.pricePerUnit = getPackPrice(item.productId, value) + getFlavourExtra(nextItem.flavour);
+        }
+
+        if (field === "flavour") {
+          nextItem.pricePerUnit = getPackPrice(item.productId, item.packSize) + getFlavourExtra(value);
+        }
+
+        return nextItem;
+      });
+      return { ...prev, order: { ...prev.order, items } };
+    });
+  };
+
+  const addItem = () => {
+    setEditOrder(prev => {
+      const firstProduct = PRODUCTS[0];
+      const firstPack = firstProduct.packSizes?.[0]?.name || "";
+      const firstFlavour = FLAVOURS[0]?.label || "";
+      const newItem = {
+        productId: firstProduct.id,
+        productTitle: firstProduct.title,
+        packSize: firstPack,
+        flavour: firstFlavour,
+        quantity: 1,
+        pricePerUnit: getPackPrice(firstProduct.id, firstPack) + getFlavourExtra(firstFlavour)
+      };
+      return { ...prev, order: { ...prev.order, items: [...(prev.order.items || []), newItem] } };
+    });
+  };
+
+  const removeItem = (index) => {
+    setEditOrder(prev => {
+      const items = prev.order.items.filter((_, i) => i !== index);
+      return { ...prev, order: { ...prev.order, items } };
+    });
+  };
+
+  const normalizeAmount = (value) => {
+    const parsed = parseFloat(String(value).replace(/[^0-9.\-]/g, ""));
+    return Number.isNaN(parsed) ? 0 : parsed;
+  };
+
+  const recalcOrderTotals = (rawOrder) => {
+    const items = rawOrder.order?.items || [];
+    const itemSubtotal = items.reduce((sum, item) => sum + (Number(item.quantity) || 0) * (Number(item.pricePerUnit) || 0), 0);
+    const subtotal = normalizeAmount(rawOrder.order?.subtotal) || itemSubtotal;
+    const surcharge = normalizeAmount(rawOrder.order?.surcharge);
+    const deliveryFee = normalizeAmount(rawOrder.fulfillment?.deliveryFee);
+    const tax = normalizeAmount(rawOrder.order?.tax) || Number(((subtotal + surcharge + deliveryFee) * 0.13).toFixed(2));
+    const total = normalizeAmount(rawOrder.order?.total) || Number((subtotal + surcharge + deliveryFee + tax).toFixed(2));
+
+    return {
+      ...rawOrder,
+      order: {
+        ...rawOrder.order,
+        subtotal: subtotal.toFixed(2),
+        surcharge: surcharge.toFixed(2),
+        tax: tax.toFixed(2),
+        total: total.toFixed(2)
+      },
+      fulfillment: {
+        ...rawOrder.fulfillment,
+        deliveryFee: deliveryFee.toFixed(2)
+      }
+    };
+  };
+
+  const handleSaveEdit = async (event) => {
+    event.preventDefault();
+    if (!editOrder) return;
+
+    setIsBusy(true);
+    const finalOrder = recalcOrderTotals(editOrder);
+    const payload = {
+      customer: finalOrder.customer,
+      fulfillment: finalOrder.fulfillment,
+      order: finalOrder.order,
+      status: finalOrder.status || "new"
+    };
+
+    if (finalOrder.createdAt) {
+      const parsedDate = new Date(finalOrder.createdAt);
+      if (!Number.isNaN(parsedDate.getTime())) {
+        payload.createdAt = Timestamp.fromDate(parsedDate);
+      }
+    }
+
+    try {
+      await updateDoc(doc(db, "orders", finalOrder.id), payload);
+      setOrders(prev => prev.map(o => o.id === finalOrder.id ? { ...o, ...payload } : o));
+      closeEditModal();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to save order changes.");
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const confirmDeleteOrder = async () => {
+    if (!deleteTarget) return;
+    setIsBusy(true);
+    try {
+      await deleteDoc(doc(db, "orders", deleteTarget));
+      setOrders(prev => prev.filter(o => o.id !== deleteTarget));
+      closeDeletePopup();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to delete order.");
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
   if (authLoading) return <div className="flex min-h-screen items-center justify-center"><Loader type="cupcake" /></div>;
 
   if (user && !isAuthorized) {
@@ -111,8 +313,24 @@ export default function AdminPage({ darkMode }) {
               className={`rounded-[2.5rem] border-2 overflow-hidden shadow-sm ${darkMode ? "bg-gray-900 border-gray-800" : "bg-white border-pink-50"}`}
             >
               {/* Top Banner: Status and ID */}
-              <div className={`px-8 py-3 flex justify-between items-center ${darkMode ? "bg-gray-800/50" : "bg-pink-50/30"}`}>
-                <span className="text-[10px] font-black opacity-40 uppercase tracking-tighter">Order Ref: {order.id}</span>
+              <div className={`px-8 py-3 flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center ${darkMode ? "bg-gray-800/50" : "bg-pink-50/30"}`}>
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="text-[10px] font-black opacity-40 uppercase tracking-tighter">Order Ref: {order.id}</span>
+                  <button
+                    type="button"
+                    onClick={() => openEditModal(order)}
+                    className="text-[10px] uppercase rounded-full border border-pink-200 px-3 py-1 font-black tracking-widest transition hover:bg-pink-100"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeleteTarget(order.id)}
+                    className="text-[10px] uppercase rounded-full border border-red-200 px-3 py-1 font-black tracking-widest text-red-600 transition hover:bg-red-100"
+                  >
+                    Delete
+                  </button>
+                </div>
                 <select 
                   value={order.status || "new"} 
                   onChange={(e) => handleStatusUpdate(order.id, e.target.value)}
@@ -237,6 +455,67 @@ export default function AdminPage({ darkMode }) {
           </button>
         )}
       </div>
+
+      <AnimatePresence>
+        {isEditOpen && editOrder && (
+          <OrderEditModal
+            order={editOrder}
+            onClose={closeEditModal}
+            onSave={handleSaveEdit}
+            isBusy={isBusy}
+            statusOptions={statusOptions}
+            products={PRODUCTS}
+            flavours={FLAVOURS}
+            updateCustomerField={updateCustomerField}
+            updateFulfillmentField={updateFulfillmentField}
+            updateOrderField={updateOrderField}
+            updateRootField={updateRootField}
+            updateOrderItemField={updateOrderItemField}
+            addItem={addItem}
+            removeItem={removeItem}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {deleteTarget && (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <motion.div
+              className="w-full max-w-md rounded-[2rem] bg-white p-8 shadow-2xl dark:bg-gray-950 dark:text-white"
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 20, opacity: 0 }}
+            >
+              <h2 className="text-2xl font-black uppercase tracking-tight">Delete this order?</h2>
+              <p className="mt-4 text-sm opacity-70">
+                This cannot be undone. Confirm deletion for order {orders.find(o => o.id === deleteTarget)?.id || deleteTarget}.
+              </p>
+              <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={closeDeletePopup}
+                  className="rounded-2xl border border-gray-300 px-6 py-3 text-sm uppercase font-black transition hover:bg-gray-100 dark:border-gray-700 dark:hover:bg-gray-900"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmDeleteOrder}
+                  disabled={isBusy}
+                  className="rounded-2xl bg-red-500 px-6 py-3 text-sm uppercase font-black text-white transition hover:bg-red-600 disabled:opacity-40"
+                >
+                  {isBusy ? "Deleting…" : "Delete Order"}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
