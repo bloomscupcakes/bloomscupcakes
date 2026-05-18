@@ -159,7 +159,20 @@ export default function Home({ darkMode }) {
 
       {/* ================= OUR CUPCAKES ================= */}
       <section className="px-4 sm:px-6 py-12">
-        {/* ===== FLAVOURS ===== */}
+        
+
+        {/* ===== PACK SIZES ===== */}
+        <h2
+          className={`text-3xl font-bold text-center mb-10 ${darkMode ? "text-pink-400" : "text-pink-600"
+            }`}
+        >
+          Our Products
+        </h2>
+
+        {/* PRODUCT GRID */}
+        <ProductGrid darkMode={darkMode} />
+
+{/* ===== FLAVOURS ===== */}
         <h3
           className={`text-xl font-semibold text-center mb-6 ${darkMode ? "text-gray-300" : "text-gray-700"
             }`}
@@ -275,47 +288,6 @@ export default function Home({ darkMode }) {
           </motion.div>
         </div>
 
-        {/* ===== PACK SIZES ===== */}
-        <h2
-          className={`text-3xl font-bold text-center mb-10 ${darkMode ? "text-pink-400" : "text-pink-600"
-            }`}
-        >
-          Our Products
-        </h2>
-
-        {/* PRODUCT GRID */}
-        <ProductGrid darkMode={darkMode} />
-
-
-
-
-        {/* ===== PACK INFO ===== */}
-        <div className="text-center mb-8">
-          <p
-            className={`text-lg ${darkMode ? "text-gray-300" : "text-gray-700"
-              }`}
-          >
-            Customise your order in cart page.
-          </p>
-        </div>
-
-        {/* ===== PRIMARY CTA ===== */}
-        <div className="text-center mb-12">
-          <Link
-            to="/cart"
-            onClick={() =>
-              trackEvent("cta_click_order", {
-                location: "pack_infosection",
-              })
-            }
-            className={`inline-block px-10 py-4 text-lg rounded-xl font-semibold shadow-lg transition hover:scale-105 ${darkMode
-              ? "bg-pink-600 text-white hover:bg-pink-700"
-              : "bg-pink-500 text-white hover:bg-pink-600"
-              }`}
-          >
-            Customize & Order
-          </Link>
-        </div>
 
         {/* ===== CUSTOM ORDER CARD ===== */}
         <div className="max-w-3xl mx-auto">

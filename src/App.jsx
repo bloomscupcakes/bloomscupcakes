@@ -15,7 +15,8 @@ const Gallery = lazy(() => import("./pages/Gallery"));
 const AlergenInfo = lazy(() => import("./pages/AlergenInfo"));
 const TermsAndConditions = lazy(() => import("./pages/TermsAndConditions"));
 const Submitted = lazy(() => import("./pages/Submitted"));
-const ShowOrders = lazy(() => import("./pages/ShowOrders"));
+const AdminPage = lazy(() => import("./pages/AdminPage"));
+const Menu = lazy(() => import("./pages/Menu"));
 
 function AnalyticsTracker() {
   const location = useLocation();
@@ -109,7 +110,8 @@ export default function App() {
                 <Route path="/alergen-info" element={<AlergenInfo darkMode={darkMode} />} />
                 <Route path="/terms-and-conditions" element={<TermsAndConditions darkMode={darkMode} />} />
                 <Route path="/submitted" element={<Submitted darkMode={darkMode} />} />
-                <Route path="/showorders" element={<ShowOrders darkMode={darkMode} />} />
+                <Route path="/menu" element={<Menu darkMode={darkMode} />} />
+                <Route path="/admin" element={<AdminPage darkMode={darkMode} />} />
                 <Route path="/bloomscupcakes" element={<Home darkMode={darkMode} />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>

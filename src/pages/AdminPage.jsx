@@ -7,7 +7,7 @@ import Loader from "../components/Loader";
 
 const PAGE_SIZE = 8;
 
-export default function ShowOrders({ darkMode }) {
+export default function AdminPage({ darkMode }) {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [authLoading, setAuthLoading] = useState(true);

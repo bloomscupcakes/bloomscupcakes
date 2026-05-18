@@ -48,7 +48,7 @@ export default function Footer({ darkMode }) {
             </div>
             <div className={`text-sm mt-4 ${darkMode ? "text-gray-500" : "text-gray-500"
               }`}>
-              <Link to="/showorders" className={`transition ${darkMode ? "hover:text-pink-400" : "hover:text-pink-500"
+              <Link to="/admin" className={`transition ${darkMode ? "hover:text-pink-400" : "hover:text-pink-500"
                 }`}>Admin page</Link>
             </div>
           </motion.div>

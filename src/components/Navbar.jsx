@@ -19,7 +19,8 @@ export default function Navbar({ darkMode, toggleDarkMode }) {
   const navItems = [
     { name: "Home", to: "/" },
     { name: "Gallery", to: "/gallery" },
-    { name: "Cart", to: "/cart" }, // Fixed to point to order
+    { name: "Menu", to: "/menu" },
+    { name: "Cart", to: "/cart" },
     { name: "Allergens", to: "/alergen-info" },
     { name: "Contact", to: "/contact" },
   ];
