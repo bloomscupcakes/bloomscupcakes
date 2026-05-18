@@ -19,6 +19,23 @@ export default function OrderEditModal({
   const contactOptions = ["Email", "Phone", "Text"];
 
   const getProductById = (productId) => products.find((product) => product.id === productId) || products[0];
+  const getProductFlavours = (product) => product.flavours || flavours;
+  const getProductFillings = (product) => product.fillings || [];
+  const getProductDiameters = (product) => product.diameters || [];
+  const getTierCount = (packName) => {
+    if (/3\s*tier/i.test(packName)) return 3;
+    if (/2\s*tier/i.test(packName)) return 2;
+    if (/^(?:single|single cakes?|1\s*tier)/i.test(packName)) return 1;
+    return 1;
+  };
+  const getDiameterValue = (diam) => Number(diam ?? 0);
+  const getAllowedDiameters = (product, tierIndex, diameters) => {
+    const options = getProductDiameters(product);
+    if (tierIndex === 0) return options;
+    const previous = diameters?.[tierIndex - 1];
+    const minValue = getDiameterValue(previous);
+    return options.filter((option) => getDiameterValue(option.label) > minValue);
+  };
 
   return (
     <motion.div
@@ -188,15 +205,60 @@ export default function OrderEditModal({
                   <div className="grid gap-3 sm:grid-cols-2">
                     <label className="text-[10px] uppercase font-black opacity-70">Flavour</label>
                     <select
-                      value={item.flavour || flavours[0]?.label}
+                      value={item.flavour || getProductFlavours(selectedProduct)[0]?.label}
                       onChange={(e) => updateOrderItemField(index, "flavour", e.target.value)}
                       className="w-full rounded-2xl border-2 px-4 py-3 outline-none dark:bg-gray-900"
                     >
-                      {flavours.map((flavour) => (
+                      {getProductFlavours(selectedProduct).map((flavour) => (
                         <option key={flavour.label} value={flavour.label}>{flavour.label}</option>
                       ))}
                     </select>
                   </div>
+                  {getProductFillings(selectedProduct).length > 0 && (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label className="text-[10px] uppercase font-black opacity-70">Filling</label>
+                      <select
+                        value={item.filling || getProductFillings(selectedProduct)[0]?.label || ""}
+                        onChange={(e) => updateOrderItemField(index, "filling", e.target.value)}
+                        className="w-full rounded-2xl border-2 px-4 py-3 outline-none dark:bg-gray-900"
+                      >
+                        {getProductFillings(selectedProduct).map((fill) => (
+                          <option key={fill.label} value={fill.label}>{fill.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  {getProductDiameters(selectedProduct).length > 0 && (
+                    <div className="space-y-3">
+                      <label className="text-[10px] uppercase font-black opacity-70">Diameters</label>
+                      <div className="grid gap-3">
+                        {Array.from({ length: getTierCount(item.packSize || selectedProduct.packSizes?.[0]?.name) }, (_, tierIndex) => (
+                          <div key={tierIndex}>
+                            <p className="text-[10px] font-black uppercase opacity-70">
+                              {getTierCount(item.packSize || selectedProduct.packSizes?.[0]?.name) === 1 ? "Cake size" : `Layer ${tierIndex + 1} size`}
+                            </p>
+                            <select
+                              value={item.diameters?.[tierIndex] || getProductDiameters(selectedProduct)[0]?.label || ""}
+                              onChange={(e) => {
+                                const nextDiameters = Array.isArray(item.diameters) ? [...item.diameters] : [];
+                                nextDiameters[tierIndex] = e.target.value;
+                                for (let nextTier = tierIndex + 1; nextTier < getTierCount(item.packSize || selectedProduct.packSizes?.[0]?.name); nextTier += 1) {
+                                  const allowed = getAllowedDiameters(selectedProduct, nextTier, nextDiameters);
+                                  nextDiameters[nextTier] = allowed[0]?.label || "";
+                                }
+                                updateOrderItemField(index, "diameters", nextDiameters);
+                              }}
+                              className="w-full rounded-2xl border-2 px-4 py-3 outline-none dark:bg-gray-900"
+                            >
+                              {getAllowedDiameters(selectedProduct, tierIndex, item.diameters || []).map((diam) => (
+                                <option key={diam.label} value={diam.label}>{diam.label}</option>
+                              ))}
+                            </select>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <div className="grid gap-3 sm:grid-cols-2">
                     <label className="text-[10px] uppercase font-black opacity-70">Quantity</label>
                     <input

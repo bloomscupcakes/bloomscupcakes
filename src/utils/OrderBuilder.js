@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { PRODUCTS, FLAVOURS } from "../utils/config";
+import { PRODUCTS } from "../utils/config";
 import { useCart } from "../contexts/CartContext";
 import { trackEvent } from "../utils/analytics";
 import Loader from "../components/Loader";
@@ -28,7 +28,6 @@ export default function Cart({ darkMode }) {
   const calculateItemPrice = (item) => {
     const product = PRODUCTS.find(p => p.id === item.id);
     const packSizeObj = product?.packSizes.find(ps => ps.name.startsWith(item.selectedPackSize.toString()));
-    const flavourObj = FLAVOURS.find(f => f.label === item.selectedFlavour);
     return (packSizeObj?.price || 0) + (flavourObj?.extra || 0);
   };
 

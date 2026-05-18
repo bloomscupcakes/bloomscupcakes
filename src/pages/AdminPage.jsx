@@ -5,7 +5,7 @@ import { collection, getDocs, query, orderBy, startAfter, limit, updateDoc, dele
 import { getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
 import Loader from "../components/Loader";
 import OrderEditModal from "../components/OrderEditModal";
-import { PRODUCTS, FLAVOURS } from "../utils/config";
+import { PRODUCTS } from "../utils/config";
 
 const PAGE_SIZE = 8;
 
@@ -112,20 +112,58 @@ export default function AdminPage({ darkMode }) {
 
   const getProductById = (id) => PRODUCTS.find(product => product.id === id) || PRODUCTS[0];
   const getProductByTitle = (title) => PRODUCTS.find(product => product.title === title || product.id === title) || PRODUCTS[0];
-  const getFlavourExtra = (flavour) => FLAVOURS.find(option => option.label === flavour)?.extra || 0;
+
+  const getFlavourExtra = (productId, flavour) => {
+    const product = getProductById(productId);
+    return product.flavours?.find(option => option.label === flavour)?.extra ?? 0;
+  };
+
+  const getFillingExtra = (productId, filling) => {
+    const product = getProductById(productId);
+    return product.fillings?.find(option => option.label === filling)?.extra ?? 0;
+  };
+
+  const getDiameterExtra = (productId, diameter) => {
+    const product = getProductById(productId);
+    return product.diameters?.find(option => String(option.label) === String(diameter))?.extra ?? 0;
+  };
+
   const getPackPrice = (productId, packSize) => {
     const product = getProductById(productId);
     return product.packSizes.find(pack => pack.name === packSize)?.price ?? product.packSizes?.[0]?.price ?? 0;
+  };
+
+  const getTierCount = (packName) => {
+    if (/3\s*tier/i.test(packName)) return 3;
+    if (/2\s*tier/i.test(packName)) return 2;
+    if (/single/i.test(packName)) return 1;
+    return 1;
+  };
+
+  const normalizeDiameters = (diameters) =>
+    Array.isArray(diameters)
+      ? diameters.map(String)
+      : diameters === undefined || diameters === null
+        ? []
+        : [String(diameters)];
+
+  const calculateAdminItemPrice = ({ productId, packSize, flavour, filling, diameters }) => {
+    const base = getPackPrice(productId, packSize);
+    const flavourExtra = getFlavourExtra(productId, flavour);
+    const fillingExtra = getFillingExtra(productId, filling);
+    const diameterExtra = normalizeDiameters(diameters).reduce((sum, diameter) => sum + getDiameterExtra(productId, diameter), 0);
+    return Number(base + flavourExtra + fillingExtra + diameterExtra);
   };
 
   const prepareItemForEdit = (item) => {
     const product = item.productId ? getProductById(item.productId) : getProductByTitle(item.productTitle || "");
     const productId = product.id;
     const packSize = item.packSize || product.packSizes?.[0]?.name || "";
-    const flavour = item.flavour || FLAVOURS?.[0]?.label || "";
+    const flavour = item.flavour || product.flavours?.[0]?.label || "";
+    const filling = item.filling || product.fillings?.[0]?.label || "";
+    const diameters = normalizeDiameters(item.diameters || item.selectedDiameters);
     const quantity = Number(item.quantity) || 1;
-    const packPrice = getPackPrice(productId, packSize);
-    const pricePerUnit = Number(item.pricePerUnit) || Number(packPrice + getFlavourExtra(flavour));
+    const pricePerUnit = Number(item.pricePerUnit) || calculateAdminItemPrice({ productId, packSize, flavour, filling, diameters });
 
     return {
       ...item,
@@ -133,6 +171,8 @@ export default function AdminPage({ darkMode }) {
       productTitle: product.title,
       packSize,
       flavour,
+      filling,
+      diameters,
       quantity,
       pricePerUnit
     };
@@ -147,17 +187,42 @@ export default function AdminPage({ darkMode }) {
         if (field === "productId") {
           const product = getProductById(value);
           const defaultPack = product.packSizes?.[0]?.name || "";
-          nextItem.productTitle = product.title;
-          nextItem.packSize = defaultPack;
-          nextItem.pricePerUnit = getPackPrice(value, defaultPack) + getFlavourExtra(nextItem.flavour);
+          const defaultFlavour = product.flavours?.[0]?.label || "";
+          const defaultFilling = product.fillings?.[0]?.label || "";
+          const defaultDiameters = product.diameters
+            ? Array.from({ length: getTierCount(defaultPack) }, () => product.diameters[0]?.label || "")
+            : [];
+
+          nextItem = {
+            ...nextItem,
+            productTitle: product.title,
+            packSize: defaultPack,
+            flavour: defaultFlavour,
+            filling: defaultFilling,
+            diameters: defaultDiameters,
+          };
         }
 
         if (field === "packSize") {
-          nextItem.pricePerUnit = getPackPrice(item.productId, value) + getFlavourExtra(nextItem.flavour);
+          const product = getProductById(item.productId);
+          const tierCount = getTierCount(value);
+          const existingDiameters = normalizeDiameters(item.diameters).slice(0, tierCount);
+          nextItem.diameters = product.diameters
+            ? Array.from(
+                { length: tierCount },
+                (_, idx) => existingDiameters[idx] ?? (product.diameters[0]?.label || "")
+              )
+            : [];
         }
 
-        if (field === "flavour") {
-          nextItem.pricePerUnit = getPackPrice(item.productId, item.packSize) + getFlavourExtra(value);
+        if (field === "flavour" || field === "filling" || field === "diameters" || field === "packSize" || field === "productId") {
+          nextItem.pricePerUnit = calculateAdminItemPrice({
+            productId: nextItem.productId,
+            packSize: nextItem.packSize,
+            flavour: nextItem.flavour,
+            filling: nextItem.filling,
+            diameters: nextItem.diameters,
+          });
         }
 
         return nextItem;
@@ -170,14 +235,26 @@ export default function AdminPage({ darkMode }) {
     setEditOrder(prev => {
       const firstProduct = PRODUCTS[0];
       const firstPack = firstProduct.packSizes?.[0]?.name || "";
-      const firstFlavour = FLAVOURS[0]?.label || "";
+      const firstFlavour = firstProduct.flavours?.[0]?.label ||"";
+      const firstFilling = firstProduct.fillings?.[0]?.label || "";
+      const firstDiameters = firstProduct.diameters
+        ? Array.from({ length: getTierCount(firstPack) }, () => firstProduct.diameters[0]?.label || "")
+        : [];
       const newItem = {
         productId: firstProduct.id,
         productTitle: firstProduct.title,
         packSize: firstPack,
         flavour: firstFlavour,
+        filling: firstFilling,
+        diameters: firstDiameters,
         quantity: 1,
-        pricePerUnit: getPackPrice(firstProduct.id, firstPack) + getFlavourExtra(firstFlavour)
+        pricePerUnit: calculateAdminItemPrice({
+          productId: firstProduct.id,
+          packSize: firstPack,
+          flavour: firstFlavour,
+          filling: firstFilling,
+          diameters: firstDiameters,
+        }),
       };
       return { ...prev, order: { ...prev.order, items: [...(prev.order.items || []), newItem] } };
     });
@@ -383,9 +460,13 @@ export default function AdminPage({ darkMode }) {
                       <div key={i} className="flex justify-between items-start text-sm">
                         <div className="pr-4">
                           <p className="font-black leading-none">{item.quantity}x {item.productTitle}</p>
-                          <p className="text-[10px] font-bold opacity-40 uppercase mt-1">{item.packSize} • {item.flavour}</p>
+                          <p className="text-[10px] font-bold opacity-40 uppercase mt-1">
+                            {item.packSize} • {item.flavour}
+                            {item.filling ? ` • ${item.filling}` : ""}
+                            {Array.isArray(item.diameters) && item.diameters.length > 0 ? ` • ${item.diameters.map((diam) => `${diam}"`).join(" / ")}` : ""}
+                          </p>
                         </div>
-                        <p className="font-black text-pink-500">${item.quantity * item.pricePerUnit}</p>
+                        <p className="font-black text-pink-500">${(Number(item.quantity) || 0) * (Number(item.pricePerUnit) || 0)}</p>
                       </div>
                     ))}
                   </div>
@@ -465,7 +546,7 @@ export default function AdminPage({ darkMode }) {
             isBusy={isBusy}
             statusOptions={statusOptions}
             products={PRODUCTS}
-            flavours={FLAVOURS}
+            flavours={PRODUCTS.flatMap(p => p.flavours || [])}
             updateCustomerField={updateCustomerField}
             updateFulfillmentField={updateFulfillmentField}
             updateOrderField={updateOrderField}

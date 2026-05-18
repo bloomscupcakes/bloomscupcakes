@@ -1,13 +1,59 @@
 import { motion } from "framer-motion";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+
+const getTierCount = (packName) => {
+  if (/3\s*tier/i.test(packName)) return 3;
+  if (/2\s*tier/i.test(packName)) return 2;
+  if (/single/i.test(packName)) return 1;
+  return 1;
+};
+
+const makeDiameterDefaults = (product, count) =>
+  Array.from({ length: count }, () => product.diameters?.[0] || { label: "", extra: 0 });
+
+const getProductFlavours = (product, defaultFlavours) => product.flavours || defaultFlavours;
+const getProductFillings = (product) => product.fillings || [];
+const getProductDiameters = (product) => product.diameters || [];
+const getDiameterValue = (diam) => {
+  const raw = diam?.label ?? diam;
+  return Number(raw ?? 0);
+};
+const getAllowedDiameters = (product, tierIndex, selectedDiameters) => {
+  const options = getProductDiameters(product);
+  if (tierIndex === 0) return options;
+  const previous = selectedDiameters?.[tierIndex - 1];
+  const minValue = getDiameterValue(previous);
+  return options.filter((option) => getDiameterValue(option) > minValue);
+};
 
 export default function AddItemModal({ products = [], flavours = [], darkMode = false, onClose, onAdd }) {
   const [productId, setProductId] = useState(products[0]?.id || "");
-  const product = products.find(p => p.id === productId) || products[0] || { packSizes: [] };
+  const product = products.find((p) => p.id === productId) || products[0] || { packSizes: [] };
   const [packSize, setPackSize] = useState(product?.packSizes?.[0]?.name || "");
-  const [flavour, setFlavour] = useState(flavours[0]?.label || "");
+  const [flavour, setFlavour] = useState(getProductFlavours(product, flavours)[0]?.label || "");
+  const [filling, setFilling] = useState(getProductFillings(product)[0]?.label || "");
+  const [selectedDiameters, setSelectedDiameters] = useState(makeDiameterDefaults(product, getTierCount(packSize)));
   const [quantity, setQuantity] = useState(1);
-  const imgSrc = product?.packSizes?.find(ps => ps.name === packSize)?.img || product?.packSizes?.[0]?.img || "";
+
+  useEffect(() => {
+    const p = products.find((p) => p.id === productId) || products[0] || { packSizes: [] };
+    setPackSize(p?.packSizes?.[0]?.name || "");
+    setFlavour(getProductFlavours(p, flavours)[0]?.label || "");
+    setFilling(getProductFillings(p)[0]?.label || "");
+    setSelectedDiameters(makeDiameterDefaults(p, getTierCount(p?.packSizes?.[0]?.name || "")));
+  }, [productId, products, flavours]);
+
+  useEffect(() => {
+    if (!product?.packSizes?.length) return;
+    const pack = product.packSizes.find((ps) => ps.name === packSize) || product.packSizes[0];
+    if (!product.diameters?.length) {
+      setSelectedDiameters([]);
+      return;
+    }
+    setSelectedDiameters(makeDiameterDefaults(product, getTierCount(pack.name)));
+  }, [packSize, product]);
+
+  const imgSrc = product?.packSizes?.find((ps) => ps.name === packSize)?.img || product?.packSizes?.[0]?.img || "";
 
   const applyAdd = () => {
     if (!product) return;
@@ -16,14 +62,14 @@ export default function AddItemModal({ products = [], flavours = [], darkMode = 
       title: product.title,
       selectedPackSize: packSize,
       selectedFlavour: flavour,
+      selectedFilling: filling || undefined,
+      selectedDiameters: selectedDiameters.map((d) => d.label),
       quantity: Number(quantity) || 1,
     });
   };
 
   const handleProductChange = (val) => {
     setProductId(val);
-    const p = products.find(p => p.id === val);
-    setPackSize(p?.packSizes?.[0]?.name || "");
   };
 
   return (
@@ -59,23 +105,84 @@ export default function AddItemModal({ products = [], flavours = [], darkMode = 
             <div>
               <label className="text-[10px] uppercase font-black opacity-70">Product</label>
               <select value={productId} onChange={(e) => handleProductChange(e.target.value)} className={`w-full mt-2 rounded-2xl border-2 px-4 py-3 outline-none ${darkMode ? 'bg-gray-800 text-white border-gray-700' : 'bg-white text-gray-900 border-gray-200'}`}>
-                {products.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
+                {products.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.title}
+                  </option>
+                ))}
               </select>
             </div>
 
             <div>
               <label className="text-[10px] uppercase font-black opacity-70">Pack size</label>
               <select value={packSize} onChange={(e) => setPackSize(e.target.value)} className={`w-full mt-2 rounded-2xl border-2 px-4 py-3 outline-none ${darkMode ? 'bg-gray-800 text-white border-gray-700' : 'bg-white text-gray-900 border-gray-200'}`}>
-                {product?.packSizes?.map(ps => <option key={ps.name} value={ps.name}>{ps.name} — ${ps.price}</option>)}
+                {product?.packSizes?.map((ps) => (
+                  <option key={ps.name} value={ps.name}>
+                    {ps.name} — ${ps.price}
+                  </option>
+                ))}
               </select>
             </div>
 
             <div>
               <label className="text-[10px] uppercase font-black opacity-70">Flavour</label>
               <select value={flavour} onChange={(e) => setFlavour(e.target.value)} className={`w-full mt-2 rounded-2xl border-2 px-4 py-3 outline-none ${darkMode ? 'bg-gray-800 text-white border-gray-700' : 'bg-white text-gray-900 border-gray-200'}`}>
-                {flavours.map(f => <option key={f.label} value={f.label}>{f.label}</option>)}
+                {getProductFlavours(product, flavours).map((f) => (
+                  <option key={f.label} value={f.label}>
+                    {f.label}
+                  </option>
+                ))}
               </select>
             </div>
+
+            {product.fillings?.length > 0 && (
+              <div>
+                <label className="text-[10px] uppercase font-black opacity-70">Filling</label>
+                <select value={filling} onChange={(e) => setFilling(e.target.value)} className={`w-full mt-2 rounded-2xl border-2 px-4 py-3 outline-none ${darkMode ? 'bg-gray-800 text-white border-gray-700' : 'bg-white text-gray-900 border-gray-200'}`}>
+                  {getProductFillings(product).map((fill) => (
+                    <option key={fill.label} value={fill.label}>
+                      {fill.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {product.diameters?.length > 0 && (
+              <div className="space-y-3">
+                <label className="text-[10px] uppercase font-black opacity-70">Cake Diameters</label>
+                <div className="grid gap-3">
+                  {Array.from({ length: getTierCount(packSize) }, (_, tierIndex) => (
+                    <div key={tierIndex}>
+                      <div className="text-xs font-black uppercase opacity-60 mb-1">Tier {tierIndex + 1}</div>
+                      <select
+                        value={selectedDiameters[tierIndex]?.label || getProductDiameters(product)[0]?.label || ""}
+                        onChange={(e) => {
+                          const selected = getProductDiameters(product).find((d) => String(d.label) === e.target.value);
+                          if (!selected) return;
+                          setSelectedDiameters((prev) => {
+                            const base = [...(prev || makeDiameterDefaults(product, getTierCount(packSize)))];
+                            base[tierIndex] = selected;
+                            for (let nextTier = tierIndex + 1; nextTier < base.length; nextTier += 1) {
+                              const allowed = getAllowedDiameters(product, nextTier, base);
+                              base[nextTier] = allowed[0] || { label: "", extra: 0 };
+                            }
+                            return base;
+                          });
+                        }}
+                        className={`w-full rounded-2xl border-2 px-4 py-3 outline-none ${darkMode ? 'bg-gray-800 text-white border-gray-700' : 'bg-white text-gray-900 border-gray-200'}`}
+                      >
+                        {getAllowedDiameters(product, tierIndex, selectedDiameters).map((diam) => (
+                          <option key={diam.label} value={diam.label}>
+                            {diam.label}" {diam.extra > 0 ? `(+ $${diam.extra})` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div>
               <label className="text-[10px] uppercase font-black opacity-70">Quantity</label>

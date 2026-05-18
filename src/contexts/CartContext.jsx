@@ -3,6 +3,18 @@ import Cookies from 'js-cookie';
 
 const CartContext = createContext();
 
+const normalizeDiameters = (diameters) =>
+  Array.isArray(diameters)
+    ? diameters.map((d) => String(d)).join("|")
+    : String(diameters || "");
+
+const itemsMatch = (a, b) =>
+  a.id === b.id &&
+  a.selectedPackSize === b.selectedPackSize &&
+  a.selectedFlavour === b.selectedFlavour &&
+  (a.selectedFilling || "") === (b.selectedFilling || "") &&
+  normalizeDiameters(a.selectedDiameters) === normalizeDiameters(b.selectedDiameters);
+
 export const useCart = () => useContext(CartContext);
 
 export const CartProvider = ({ children }) => {
@@ -21,14 +33,12 @@ export const CartProvider = ({ children }) => {
 
   const addItem = (item) => {
     setCart((prev) => {
-      const existing = prev.find(
-        (cartItem) => cartItem.id === item.id && cartItem.selectedPackSize === item.selectedPackSize && cartItem.selectedFlavour === item.selectedFlavour
-      );
+      const existing = prev.find((cartItem) => itemsMatch(cartItem, item));
 
       if (existing) {
         return prev.map((cartItem) =>
-          cartItem.id === item.id && cartItem.selectedPackSize === item.selectedPackSize && cartItem.selectedFlavour === item.selectedFlavour
-            ? { ...cartItem, quantity: cartItem.quantity + item.quantity }
+          itemsMatch(cartItem, item)
+            ? { ...cartItem, quantity: Number(cartItem.quantity || 0) + Number(item.quantity || 1) }
             : cartItem
         );
       }

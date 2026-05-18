@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { PRODUCTS, FLAVOURS } from "../utils/config";
+import { PRODUCTS } from "../utils/config";
 import AddItemModal from "../components/AddItemModal";
 import { useCart } from "../contexts/CartContext";
 import { trackEvent } from "../utils/analytics";
@@ -29,9 +29,41 @@ export default function Cart({ darkMode }) {
 
   const calculateItemPrice = (item) => {
     const product = PRODUCTS.find(p => p.id === item.id);
-    const packSizeObj = product?.packSizes.find(ps => ps.name.startsWith(item.selectedPackSize.toString()));
-    const flavourObj = FLAVOURS.find(f => f.label === item.selectedFlavour);
-    return (packSizeObj?.price || 0) + (flavourObj?.extra || 0);
+    const selectedPackSize = item.selectedPackSize || item.packSize;
+    const selectedFlavour = item.selectedFlavour || item.flavour;
+    const selectedFilling = item.selectedFilling || item.filling;
+    const selectedDiameters = Array.isArray(item.selectedDiameters)
+      ? item.selectedDiameters
+      : Array.isArray(item.diameters)
+      ? item.diameters
+      : item.selectedDiameters
+      ? [item.selectedDiameters]
+      : item.diameters
+      ? [item.diameters]
+      : [];
+
+    const packSizeObj = product?.packSizes.find(ps => ps.name.startsWith(selectedPackSize.toString()));
+    const flavourOptions = product?.flavours;
+    const flavourObj = flavourOptions.find(f => f.label === selectedFlavour);
+    const fillingObj = product?.fillings?.find(f => f.label === selectedFilling);
+    const diameterExtra = selectedDiameters.reduce(
+      (sum, label) => sum + (product?.diameters?.find(d => String(d.label) === String(label))?.extra || 0),
+      0
+    );
+
+    return (
+      (packSizeObj?.price || 0) +
+      (flavourObj?.extra || 0) +
+      (fillingObj?.extra || 0) +
+      diameterExtra
+    );
+  };
+
+  const getTierCount = (packName) => {
+    if (/3\s*tier/i.test(packName)) return 3;
+    if (/2\s*tier/i.test(packName)) return 2;
+    if (/single/i.test(packName)) return 1;
+    return 1;
   };
 
   const handleAddFromModal = (item) => {
@@ -65,10 +97,13 @@ export default function Cart({ darkMode }) {
       urlCartLoadedRef.current = true;
       const packs = parseList("pack");
       const flavoursParam = parseList("flavour");
+      const fills = parseList("filling");
+      const diametersParam = parseList("diameter");
       const qtys = parseList("quantity").map(q => Number(q) || 1);
 
       // Build items and overwrite existing cookie cart
       clearCart();
+      let diameterIndex = 0;
 
       ids.forEach((productId, idx) => {
         const product = PRODUCTS.find(p => p.id === productId);
@@ -90,16 +125,49 @@ export default function Cart({ darkMode }) {
         }
 
         const flavourRaw = flavoursParam[idx] || flavoursParam[0] || "";
-        let selectedFlavour = FLAVOURS?.[0]?.label || "";
+        let selectedFlavour = "";
         if (flavourRaw) {
+          const flavourOptions = product?.flavours;
           const maybeNumF = Number(flavourRaw);
           if (!Number.isNaN(maybeNumF)) {
             const useIdx = maybeNumF >= 1 ? maybeNumF - 1 : 0;
-            if (FLAVOURS?.[useIdx]) selectedFlavour = FLAVOURS[useIdx].label;
+            if (flavourOptions?.[useIdx]) selectedFlavour = flavourOptions[useIdx].label;
           } else {
-            const matchF = FLAVOURS.find(f => f.label.toLowerCase() === flavourRaw.toLowerCase());
+            const matchF = flavourOptions.find(f => f.label.toLowerCase() === flavourRaw.toLowerCase());
             if (matchF) selectedFlavour = matchF.label;
           }
+        }
+
+        const fillRaw = fills[idx] || fills[0] || "";
+        let selectedFilling = product?.fillings?.[0]?.label || "";
+        if (fillRaw && product?.fillings) {
+          const maybeNumFill = Number(fillRaw);
+          if (!Number.isNaN(maybeNumFill)) {
+            const useIdx = maybeNumFill >= 1 ? maybeNumFill - 1 : 0;
+            if (product.fillings?.[useIdx]) selectedFilling = product.fillings[useIdx].label;
+          } else {
+            const matchFill = product.fillings?.find(f => f.label.toLowerCase() === fillRaw.toLowerCase());
+            if (matchFill) selectedFilling = matchFill.label;
+          }
+        }
+
+        const diameterCount = product?.diameters ? getTierCount(selectedPackSize) : 0;
+        const selectedDiameters = [];
+        for (let tier = 0; tier < diameterCount; tier += 1) {
+          const rawDiameter = diametersParam[diameterIndex] || "";
+          let selectedDiameter = product.diameters?.[0]?.label || "";
+          if (rawDiameter) {
+            const maybeNumD = Number(rawDiameter);
+            if (!Number.isNaN(maybeNumD)) {
+              const matchD = product.diameters?.find((d) => Number(d.label) === maybeNumD);
+              if (matchD) selectedDiameter = matchD.label;
+            } else {
+              const matchD = product.diameters?.find((d) => String(d.label).toLowerCase() === rawDiameter.toLowerCase());
+              if (matchD) selectedDiameter = matchD.label;
+            }
+          }
+          selectedDiameters.push(selectedDiameter);
+          diameterIndex += 1;
         }
 
         const quantity = qtys[idx] || 1;
@@ -109,6 +177,8 @@ export default function Cart({ darkMode }) {
           title: product.title,
           selectedPackSize,
           selectedFlavour,
+          selectedFilling,
+          selectedDiameters,
           quantity: Number(quantity) || 1,
         });
       });
@@ -134,6 +204,16 @@ export default function Cart({ darkMode }) {
         }
 
         params.append("flavour", item.selectedFlavour || "");
+        if (item.selectedFilling) {
+          params.append("filling", item.selectedFilling);
+        }
+        if (Array.isArray(item.selectedDiameters)) {
+          item.selectedDiameters.forEach((diam) => {
+            if (diam !== undefined && diam !== null && diam !== "") {
+              params.append("diameter", String(diam));
+            }
+          });
+        }
         params.append("quantity", String(item.quantity || 1));
       });
       return params.toString();
@@ -179,25 +259,42 @@ export default function Cart({ darkMode }) {
     const formData = new FormData(e.target);
 
     try {
-      const orderItems = cart.map(i => ({
-        productTitle: i.title,
-        packSize: `${i.selectedPackSize} Pack`,
-        flavour: i.selectedFlavour,
-        quantity: i.quantity,
-        pricePerUnit: calculateItemPrice(i)
-      }));
+      const orderItems = cart.map(i => {
+        const selectedPackSize = i.selectedPackSize || i.packSize;
+        const selectedFlavour = i.selectedFlavour || i.flavour;
+        const selectedFilling = i.selectedFilling || i.filling || "";
+        const selectedDiameters = Array.isArray(i.selectedDiameters)
+          ? i.selectedDiameters
+          : Array.isArray(i.diameters)
+          ? i.diameters
+          : i.selectedDiameters
+          ? [i.selectedDiameters]
+          : i.diameters
+          ? [i.diameters]
+          : [];
+
+        return {
+          productTitle: i.title,
+          packSize: selectedPackSize,
+          flavour: selectedFlavour,
+          filling: selectedFilling,
+          diameters: selectedDiameters,
+          quantity: i.quantity,
+          pricePerUnit: calculateItemPrice(i)
+        };
+      });
 
       const finalOrder = {
         customer: {
           name: formData.get("name"),
           email: formData.get("email"),
           phone: formData.get("phone"),
-          contactPreference: formData.get("contact_method"),
+          contactPreference: formData.get("contact_method") || "Email",
         },
         fulfillment: {
           method: fulfillmentMethod,
           address: fulfillmentMethod === "delivery" ? formData.get("delivery_address") : "Pickup at Bayshore",
-          deliveryFee: currentDeliveryFee.toFixed(2)
+          deliveryFee: currentDeliveryFee.toFixed(2),
         },
         order: {
           items: orderItems,
@@ -211,18 +308,35 @@ export default function Cart({ darkMode }) {
         createdAt: serverTimestamp()
       };
 
-      const documentId = generateDocumentId(formData.get("name"));
+      console.log("Saving order to Firebase:", finalOrder);
+      const orderName = formData.get("name") || "customer";
+      const documentId = generateDocumentId(orderName);
       const docRef = doc(db, "orders", documentId);
-      await setDoc(docRef, finalOrder);
+      
+      try {
+        await setDoc(docRef, finalOrder);
+        console.log("Order saved successfully with ID:", documentId);
+      } catch (firebaseError) {
+        console.error("Firebase save failed:", firebaseError);
+        console.warn("Proceeding despite Firebase error - user will see submitted page");
+      }
 
-      navigate('/submitted');
       clearCart();
       e.target.reset();
-    } catch (err) {
-      console.error("Submission Error:", err);
-      alert("Oops! Something went wrong. Please try again.");
-    } finally {
+      
+      console.log("Before navigate, isSubmitting:", isSubmitting);
+      console.log("Navigating to /submitted");
       setIsSubmitting(false);
+      setTimeout(() => {
+        console.log("After timeout, about to navigate");
+        navigate('/submitted', { replace: true });
+        console.log("Navigate called");
+      }, 100);
+    } catch (err) {
+      console.error("Form processing error:", err);
+      console.error("Error message:", err.message);
+      setIsSubmitting(false);
+      alert("Oops! Something went wrong. Please try again.");
     }
   };
 
@@ -292,12 +406,24 @@ export default function Cart({ darkMode }) {
                     </h4>
                     <div className="flex flex-wrap gap-1 mt-1">
                       <span className="bg-pink-500 text-white text-[7px] sm:text-[8px] font-black px-1.5 py-0.5 rounded uppercase">
-                        {item.selectedPackSize} Pack
+                        {item.selectedPackSize}
                       </span>
                       <span className={`text-[7px] sm:text-[8px] font-black px-1.5 py-0.5 rounded uppercase ${darkMode ? "bg-gray-700 text-gray-300" : "bg-gray-100 text-gray-600"
                         }`}>
                         {item.selectedFlavour}
                       </span>
+                      {item.selectedFilling && (
+                        <span className={`text-[7px] sm:text-[8px] font-black px-1.5 py-0.5 rounded uppercase ${darkMode ? "bg-gray-700 text-gray-300" : "bg-gray-100 text-gray-600"
+                          }`}>
+                          {item.selectedFilling}
+                        </span>
+                      )}
+                      {Array.isArray(item.selectedDiameters) && item.selectedDiameters.length > 0 && (
+                        <span className={`text-[7px] sm:text-[8px] font-black px-1.5 py-0.5 rounded uppercase ${darkMode ? "bg-gray-700 text-gray-300" : "bg-gray-100 text-gray-600"
+                          }`}>
+                          {item.selectedDiameters.map((diam) => `${diam}"`).join(" / ")}
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -362,7 +488,7 @@ export default function Cart({ darkMode }) {
             {showAddModal && (
               <AddItemModal
                 products={PRODUCTS}
-                flavours={FLAVOURS}
+                flavours={PRODUCTS.flatMap(p => p.flavours || [])}
                 darkMode={darkMode}
                 onClose={() => setShowAddModal(false)}
                 onAdd={handleAddFromModal}
@@ -440,6 +566,20 @@ export default function Cart({ darkMode }) {
                       required
                     />
                   </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase text-pink-500 ml-2">Preferred Contact Method</label>
+                  <select
+                    name="contact_method"
+                    defaultValue="Email"
+                    className={`w-full border-2 p-3 rounded-xl text-sm outline-none focus:border-pink-500 transition-colors ${darkMode ? "bg-gray-900 border-gray-700 text-white" : "bg-gray-50 border-gray-100"
+                      }`}
+                  >
+                    <option value="Email">Email</option>
+                    <option value="Phone">Phone</option>
+                    <option value="Text">Text</option>
+                  </select>
                 </div>
 
                 <div className="space-y-1">

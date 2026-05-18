@@ -7,7 +7,7 @@ import chocolate from "../assets/chocolate.png";
 import redVelvet from "../assets/redvelvet.png";
 import customOrder from "../assets/custom_order.jpeg";
 import { trackEvent } from "../utils/analytics";
-import { PRODUCTS, FLAVOURS, reviews } from "../utils/config";
+import { PRODUCTS, reviews } from "../utils/config";
 import Loader from "../components/Loader";
 import ProductGrid from "../components/ProductGrid";
 
@@ -96,7 +96,7 @@ export default function Home({ darkMode }) {
 
           <p className={`max-w-xl mx-auto mb-6 text-lg ${darkMode ? "text-gray-300" : "text-gray-700"
             }`}>
-            Freshly baked cupcakes made with love, creativity, and happiness.
+            Freshly baked buttercream cakes and cupcakes made with love, creativity, and happiness.
           </p>
 
         </div>
@@ -171,123 +171,6 @@ export default function Home({ darkMode }) {
 
         {/* PRODUCT GRID */}
         <ProductGrid darkMode={darkMode} />
-
-{/* ===== FLAVOURS ===== */}
-        <h3
-          className={`text-xl font-semibold text-center mb-6 ${darkMode ? "text-gray-300" : "text-gray-700"
-            }`}
-        >
-          Available Flavours
-        </h3>
-        <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4 max-w-4xl mx-auto mb-12">
-          {/* Vanilla */}
-          <motion.div
-            whileHover={{ scale: 1.04 }}
-            className={`flex items-center gap-4 p-3 rounded-xl shadow relative ${darkMode
-              ? "bg-gray-800 border border-pink-700 text-white"
-              : "bg-white border border-pink-200 text-gray-800"
-              }`}
-          >
-            {flavoursLoading[0] && (
-              <div className="absolute inset-0 flex items-center justify-center bg-gray-100 rounded-xl">
-                <Loader type="image" size="small" />
-              </div>
-            )}
-            <img
-              src={vanilla}
-              className="w-16 h-16 object-cover rounded-lg"
-              alt="Vanilla Cupcake"
-              onLoad={() => {
-                setFlavoursLoading(prev => {
-                  const newLoading = [...prev];
-                  newLoading[0] = false;
-                  return newLoading;
-                });
-              }}
-              onError={() => {
-                setFlavoursLoading(prev => {
-                  const newLoading = [...prev];
-                  newLoading[0] = false;
-                  return newLoading;
-                });
-              }}
-            />
-            <h4 className="font-semibold">Vanilla</h4>
-          </motion.div>
-
-          {/* Chocolate */}
-          <motion.div
-            whileHover={{ scale: 1.04 }}
-            className={`flex items-center gap-4 p-3 rounded-xl shadow relative ${darkMode
-              ? "bg-gray-800 border border-pink-700 text-white"
-              : "bg-white border border-pink-200 text-gray-800"
-              }`}
-          >
-            {flavoursLoading[1] && (
-              <div className="absolute inset-0 flex items-center justify-center bg-gray-100 rounded-xl">
-                <Loader type="image" size="small" />
-              </div>
-            )}
-            <img
-              src={chocolate}
-              className="w-16 h-16 object-cover rounded-lg"
-              alt="Chocolate Cupcake"
-              onLoad={() => {
-                setFlavoursLoading(prev => {
-                  const newLoading = [...prev];
-                  newLoading[1] = false;
-                  return newLoading;
-                });
-              }}
-              onError={() => {
-                setFlavoursLoading(prev => {
-                  const newLoading = [...prev];
-                  newLoading[1] = false;
-                  return newLoading;
-                });
-              }}
-            />
-            <h4 className="font-semibold">Chocolate</h4>
-          </motion.div>
-
-          {/* Red Velvet */}
-          <motion.div
-            whileHover={{ scale: 1.04 }}
-            className={`flex items-center gap-4 p-3 rounded-xl shadow relative ${darkMode
-              ? "bg-gray-800 border border-pink-700 text-white"
-              : "bg-white border border-pink-200 text-gray-800"
-              }`}
-          >
-            {flavoursLoading[2] && (
-              <div className="absolute inset-0 flex items-center justify-center bg-gray-100 rounded-xl">
-                <Loader type="image" size="small" />
-              </div>
-            )}
-            <img
-              src={redVelvet}
-              className="w-16 h-16 object-cover rounded-lg"
-              alt="Red Velvet Cupcake"
-              onLoad={() => {
-                setFlavoursLoading(prev => {
-                  const newLoading = [...prev];
-                  newLoading[2] = false;
-                  return newLoading;
-                });
-              }}
-              onError={() => {
-                setFlavoursLoading(prev => {
-                  const newLoading = [...prev];
-                  newLoading[2] = false;
-                  return newLoading;
-                });
-              }}
-            />
-            <div>
-              <h4 className="font-semibold">Red Velvet</h4>
-            </div>
-          </motion.div>
-        </div>
-
 
         {/* ===== CUSTOM ORDER CARD ===== */}
         <div className="max-w-3xl mx-auto">
