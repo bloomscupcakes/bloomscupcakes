@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
 import { PRODUCTS, FLAVOURS } from "../utils/config";
+import AddItemModal from "../components/AddItemModal";
 import { useCart } from "../contexts/CartContext";
 import { trackEvent } from "../utils/analytics";
 import Loader from "../components/Loader";
@@ -12,9 +13,10 @@ import { collection, addDoc, doc, setDoc, serverTimestamp } from "firebase/fires
 import ProductGrid from "../components/ProductGrid";
 
 export default function Cart({ darkMode }) {
-  const { cart, updateItem, removeItem, clearCart } = useCart();
+  const { cart, addItem, updateItem, removeItem, clearCart } = useCart();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fulfillmentMethod, setFulfillmentMethod] = useState("pickup"); // 'pickup' or 'delivery'
+  const [showAddModal, setShowAddModal] = useState(false);
   const navigate = useNavigate();
 
   const DELIVERY_CHARGE = 10.00;
@@ -30,6 +32,11 @@ export default function Cart({ darkMode }) {
     const packSizeObj = product?.packSizes.find(ps => ps.name.startsWith(item.selectedPackSize.toString()));
     const flavourObj = FLAVOURS.find(f => f.label === item.selectedFlavour);
     return (packSizeObj?.price || 0) + (flavourObj?.extra || 0);
+  };
+
+  const handleAddFromModal = (item) => {
+    addItem(item);
+    setShowAddModal(false);
   };
 
   // --- PRICING LOGIC ---
@@ -123,22 +130,18 @@ export default function Cart({ darkMode }) {
           to="/menu"
           className="group text-sm text-gray-600 hover:text-pink-600 transition-colors duration-200"
         >
-          <span>Want to add more treats? </span>
           <span className="font-semibold text-pink-500 group-hover:underline inline-flex items-center gap-1">
             View our menu <span className="transition-transform group-hover:translate-x-0.5">→</span>
           </span>
         </Link>
       </div>
-      <div className="max-w-5xl mx-auto px-4 grid lg:grid-cols-5 gap-8 lg:gap-12 mt-4 border-t border-pink-100 dark:border-gray-800 pt-16 w-full">
+      <div className="max-w-5xl mx-auto px-4 grid lg:grid-cols-5 gap-8 lg:gap-12 mt-4 border-pink-100 dark:border-gray-800 pt-16 w-full">
 
         {/* LEFT COLUMN: CART SUMMARY */}
         <div id="cart-section" className="lg:col-span-2 w-full">
           <div className="flex items-center justify-between mb-8">
             <h2 className="text-2xl font-black text-pink-500 uppercase italic tracking-tighter">Your Cart</h2>
-            <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${darkMode ? "bg-gray-800 text-pink-400" : "bg-pink-100 text-pink-600"
-              }`}>
-              {cart.length} unique items
-            </span>
+          
           </div>
 
           <div className={`mb-10 border-l-4 border-pink-500 p-4 sm:p-5 rounded-r-2xl shadow-sm ${darkMode ? "bg-gray-800/50 text-gray-300" : "bg-pink-50 text-pink-900"
@@ -148,6 +151,16 @@ export default function Cart({ darkMode }) {
               <span className="mx-1 px-2 py-0.5 bg-pink-500 text-white rounded-lg font-black italic inline-block">3 days</span>
               notice.
             </p>
+          </div>
+
+          <div className="mb-6">
+            <button
+              type="button"
+              onClick={() => setShowAddModal(true)}
+              className="rounded-full bg-pink-500 px-4 py-2 text-[12px] font-black uppercase text-white transition hover:bg-pink-600"
+            >
+              + Add item
+            </button>
           </div>
 
           {cart.length === 0 ? (
@@ -237,6 +250,17 @@ export default function Cart({ darkMode }) {
               </div>
             </ul>
           )}
+          <AnimatePresence>
+            {showAddModal && (
+              <AddItemModal
+                products={PRODUCTS}
+                flavours={FLAVOURS}
+                darkMode={darkMode}
+                onClose={() => setShowAddModal(false)}
+                onAdd={handleAddFromModal}
+              />
+            )}
+          </AnimatePresence>
         </div>
 
         {/* RIGHT COLUMN: CONTACT FORM */}
