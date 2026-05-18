@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { PRODUCTS, FLAVOURS } from "../utils/config";
 import AddItemModal from "../components/AddItemModal";
 import { useCart } from "../contexts/CartContext";
@@ -38,6 +38,114 @@ export default function Cart({ darkMode }) {
     addItem(item);
     setShowAddModal(false);
   };
+
+  // Read query params like ?id=floral&pack=1&flavour=1 or repeated: ?id=floral&id=classic&pack=1&pack=2
+  const location = useLocation();
+  const urlCartLoadedRef = useRef(false);
+
+  useEffect(() => {
+    if (urlCartLoadedRef.current) return;
+
+    try {
+      const params = new URLSearchParams(location.search);
+      // helper to parse repeated keys and comma-separated values
+      const parseList = (key) => {
+        const all = params.getAll(key) || [];
+        if (all.length === 0 && params.has(key)) {
+          const v = params.get(key) || "";
+          return v.split(",").map(s => s.trim()).filter(Boolean);
+        }
+        // flatten comma-separated entries
+        return all.flatMap(v => v.split(",").map(s => s.trim()).filter(Boolean));
+      };
+
+      const ids = parseList("id");
+      if (!ids || ids.length === 0) return; // nothing to do
+
+      urlCartLoadedRef.current = true;
+      const packs = parseList("pack");
+      const flavoursParam = parseList("flavour");
+      const qtys = parseList("quantity").map(q => Number(q) || 1);
+
+      // Build items and overwrite existing cookie cart
+      clearCart();
+
+      ids.forEach((productId, idx) => {
+        const product = PRODUCTS.find(p => p.id === productId);
+        if (!product) return; // skip unknown product
+
+        const packRaw = packs[idx] || packs[0] || "";
+        let selectedPackSize = product.packSizes?.[0]?.name || "";
+        if (packRaw) {
+          const maybeNum = Number(packRaw);
+          if (!Number.isNaN(maybeNum)) {
+            // treat numeric as 1-based index if >=1, else 0-based
+            const useIdx = maybeNum >= 1 ? maybeNum - 1 : 0;
+            if (product.packSizes?.[useIdx]) selectedPackSize = product.packSizes[useIdx].name;
+          } else {
+            // try to match by name
+            const match = product.packSizes?.find(ps => ps.name.toLowerCase() === packRaw.toLowerCase());
+            if (match) selectedPackSize = match.name;
+          }
+        }
+
+        const flavourRaw = flavoursParam[idx] || flavoursParam[0] || "";
+        let selectedFlavour = FLAVOURS?.[0]?.label || "";
+        if (flavourRaw) {
+          const maybeNumF = Number(flavourRaw);
+          if (!Number.isNaN(maybeNumF)) {
+            const useIdx = maybeNumF >= 1 ? maybeNumF - 1 : 0;
+            if (FLAVOURS?.[useIdx]) selectedFlavour = FLAVOURS[useIdx].label;
+          } else {
+            const matchF = FLAVOURS.find(f => f.label.toLowerCase() === flavourRaw.toLowerCase());
+            if (matchF) selectedFlavour = matchF.label;
+          }
+        }
+
+        const quantity = qtys[idx] || 1;
+
+        addItem({
+          id: product.id,
+          title: product.title,
+          selectedPackSize,
+          selectedFlavour,
+          quantity: Number(quantity) || 1,
+        });
+      });
+    } catch (err) {
+      console.warn("Failed to parse cart from URL:", err);
+    }
+  }, [location.search]);
+
+  useEffect(() => {
+    const buildSearch = () => {
+      if (!cart || cart.length === 0) return "";
+
+      const params = new URLSearchParams();
+      cart.forEach((item) => {
+        params.append("id", item.id);
+
+        const product = PRODUCTS.find((p) => p.id === item.id);
+        const packIndex = product?.packSizes?.findIndex((ps) => ps.name === item.selectedPackSize);
+        if (packIndex !== undefined && packIndex >= 0) {
+          params.append("pack", String(packIndex + 1));
+        } else {
+          params.append("pack", item.selectedPackSize || "");
+        }
+
+        params.append("flavour", item.selectedFlavour || "");
+        params.append("quantity", String(item.quantity || 1));
+      });
+      return params.toString();
+    };
+
+    const newSearch = buildSearch();
+    const currentSearch = location.search.startsWith("?") ? location.search.slice(1) : location.search;
+
+    if (newSearch !== currentSearch) {
+      navigate({ pathname: location.pathname, search: newSearch ? `?${newSearch}` : "" }, { replace: true });
+    }
+  }, [cart, location.pathname, location.search, navigate]);
 
   // --- PRICING LOGIC ---
   const uniqueFlavours = [...new Set(cart.map((item) => item.selectedFlavour))];
@@ -362,7 +470,7 @@ export default function Cart({ darkMode }) {
                   className={`w-full bg-pink-500 hover:bg-pink-600 text-white py-4 rounded-[1.5rem] font-black text-lg shadow-lg active:scale-95 transition-all disabled:bg-gray-400 ${darkMode ? "shadow-pink-900/20" : "shadow-pink-200"
                     }`}
                 >
-                  {isSubmitting ? "Sending..." : "Submit Inquiry"}
+                  {isSubmitting ? "Sending..." : "Submit"}
                 </button>
               </div>
             </form>
