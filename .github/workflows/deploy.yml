@@ -19,7 +19,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: 'npm'
 
       - name: Install Dependencies
@@ -31,5 +31,5 @@ jobs:
       - name: Deploy to gh-pages Branch
         uses: JamesIves/github-pages-deploy-action@v4
         with:
-          folder: build # Change to 'dist' if using Vite instead of Create React App
+          folder: dist
           branch: gh-pages
