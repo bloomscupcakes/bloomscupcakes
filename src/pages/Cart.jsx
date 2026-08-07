@@ -336,7 +336,6 @@ export default function Cart({ darkMode }) {
         console.error("Failed to trigger Discord webhook proxy:", discordErr);
       }
 
-
       clearCart();
       e.target.reset();
       
