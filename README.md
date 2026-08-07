@@ -24,7 +24,7 @@ A beautiful, responsive cupcake ordering website built with React, Vite, and Fir
 1. Clone the repository:
 ```bash
 git clone <repository-url>
-cd bloomscupcakes
+cd repository
 ```
 
 2. Install dependencies:
@@ -53,12 +53,50 @@ VITE_GA_MEASUREMENT_ID=your_ga_measurement_id
 VITE_ADS_ID=your_ads_conversion_id
 ```
 
+### Cloudflare Worker Setup (Discord Notifications)
+
+The order submission system uses a serverless Cloudflare Worker as a proxy to keep the Discord Webhook URL hidden from frontend network logs and format incoming order data into interactive Discord embeds.
+1. Create & Deploy the Worker
+
+    Log in to your Cloudflare Dashboard.
+
+    Go to Workers & Pages → Click Create Application → Create Worker.
+
+    Click Deploy, then click Edit Code.
+
+    Paste your worker proxy script (cloudflare_worker.js).
+
+    Click Save and Deploy.
+
+2. Set Up Cloudflare Worker Secrets
+
+To allow the Worker to securely communicate with Discord, you must store your Discord Webhook as a secret:
+
+    In your Worker dashboard, go to Settings → Variables and Secrets.
+
+    Under Secrets, click Add Secret.
+
+    Set the Variable Name: DISCORD_WEBHOOK_URL
+
+    Set the Value: Your Discord Webhook URL (https://discord.com/api/webhooks/...)
+
+    Click Encrypt and Save.
+
+3. Worker Features & Functionality
+
+    CORS Enabled: Permits POST requests from your frontend domain.
+
+    mailto: Generator: Creates a pre-populated email response link in Discord containing the complete order breakdown, requested date, items, and total price.
+
+    Click-to-Call Link: Formats customer phone numbers into clickable tel: links for mobile device speed dialing.
+
 ### Firebase Setup
 
 1. Create a Firebase project at [https://console.firebase.google.com/](https://console.firebase.google.com/)
 2. Enable Firestore Database
 3. Get your Firebase config from Project Settings > General > Your apps
 4. Add the config values to your `.env` file
+
 
 ### Google Analytics Setup
 
