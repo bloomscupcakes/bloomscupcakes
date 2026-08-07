@@ -321,6 +321,22 @@ export default function Cart({ darkMode }) {
         console.warn("Proceeding despite Firebase error - user will see submitted page");
       }
 
+      // --- SEND DISCORD NOTIFICATION ---
+      // Replace with your Discord Webhook URL or Cloudflare Proxy endpoint
+      const WORKER_URL = "https://discord.bloomscupcakes.workers.dev";
+
+      try {
+        await fetch(WORKER_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(finalOrder),
+        });
+        console.log("Discord notification proxy call successful!");
+      } catch (discordErr) {
+        console.error("Failed to trigger Discord webhook proxy:", discordErr);
+      }
+
+
       clearCart();
       e.target.reset();
       
